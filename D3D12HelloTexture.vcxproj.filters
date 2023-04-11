@@ -33,6 +33,9 @@
     <ClInclude Include="D3D12HelloTexture.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="RenderToTexture.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -50,15 +53,16 @@
     <ClCompile Include="D3D12HelloTexture.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="RenderToTexture.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="shaders.hlsl">
       <Filter>Assets\Shaders</Filter>
     </CustomBuild>
-  </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="ComputeShader.hlsl">
+    <CustomBuild Include="ComputeShader.hlsl">
       <Filter>Assets\Shaders</Filter>
-    </FxCompile>
+    </CustomBuild>
   </ItemGroup>
 </Project>

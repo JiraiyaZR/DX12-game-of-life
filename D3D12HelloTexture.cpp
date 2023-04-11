@@ -157,7 +157,7 @@ void D3D12HelloTexture::LoadAssets()
         }
 
         CD3DX12_DESCRIPTOR_RANGE1 ranges[1];
-        ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC);
+        ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0);
 
         CD3DX12_ROOT_PARAMETER1 rootParameters[1];
         rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_PIXEL);
@@ -269,7 +269,7 @@ void D3D12HelloTexture::LoadAssets()
         m_vertexBufferView.StrideInBytes = sizeof(Vertex);
         m_vertexBufferView.SizeInBytes = vertexBufferSize;
     }
-
+    /*
     // Note: ComPtr's are CPU objects but this resource needs to stay in scope until
     // the command list that references it has finished executing on the GPU.
     // We will flush the GPU at the end of this method to ensure the resource is not
@@ -328,7 +328,8 @@ void D3D12HelloTexture::LoadAssets()
         srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
         srvDesc.Texture2D.MipLevels = 1;
         m_device->CreateShaderResourceView(m_texture.Get(), &srvDesc, m_srvHeap->GetCPUDescriptorHandleForHeapStart());
-    }
+
+    }*/
     
     // Close the command list and execute it to begin the initial GPU setup.
     ThrowIfFailed(m_commandList->Close());

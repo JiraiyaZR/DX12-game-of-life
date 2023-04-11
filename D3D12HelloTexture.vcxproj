@@ -115,6 +115,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="D3D12HelloTexture.h" />
+    <ClInclude Include="RenderToTexture.h" />
     <ClInclude Include="Win32Application.h" />
     <ClInclude Include="d3dx12.h" />
     <ClInclude Include="DXSample.h" />
@@ -123,6 +124,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="D3D12HelloTexture.cpp" />
+    <ClCompile Include="RenderToTexture.cpp" />
     <ClCompile Include="Win32Application.cpp" />
     <ClCompile Include="DXSample.cpp" />
     <ClCompile Include="Main.cpp" />
@@ -138,12 +140,15 @@
     </CustomBuild>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="ComputeShader.hlsl">
+    <CustomBuild Include="ComputeShader.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.1</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.1</ShaderModel>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</DeploymentContent>
+      <FileType>Document</FileType>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</DeploymentContent>
+    </CustomBuild>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
