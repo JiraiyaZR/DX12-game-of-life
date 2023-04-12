@@ -73,6 +73,7 @@ void RenderToTexture::LoadComputePipeLine()
 	//创建PSO
 	{
 		ComPtr<ID3DBlob> computeShader;
+		ComPtr<ID3DBlob> error;
 
 #if defined(_DEBUG)
 		// Enable better shader debugging with the graphics debugging tools.
@@ -80,13 +81,24 @@ void RenderToTexture::LoadComputePipeLine()
 #else
 		UINT compileFlags = 0;
 #endif
-		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"ComputeShader.hlsl").c_str(), nullptr, nullptr, "main", "cs_5_0", compileFlags, 0, &computeShader, nullptr));
+		auto hr = D3DCompileFromFile(GetAssetFullPath(L"ComputeShader.hlsl").c_str(), nullptr, nullptr, "Hmain", "cs_5_0", compileFlags, 0, &computeShader, &error);
+		if (FAILED(hr)) {
+			if (&error != nullptr) {
+				OutputDebugStringA((char*)error->GetBufferPointer());
+			}
+			ThrowIfFailed(hr);
+		}
 
 		D3D12_COMPUTE_PIPELINE_STATE_DESC computePsoDesc = {};
 		computePsoDesc.pRootSignature = m_computeRootSignature.Get();
 		computePsoDesc.CS = CD3DX12_SHADER_BYTECODE(computeShader.Get());
 		ThrowIfFailed(m_device->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&m_computePipelineState)));
 		NAME_D3D12_OBJECT(m_computePipelineState);
+
+		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"ComputeShader.hlsl").c_str(), nullptr, nullptr, "Vmain", "cs_5_0", compileFlags, 0, &computeShader, &error));
+		computePsoDesc.CS = CD3DX12_SHADER_BYTECODE(computeShader.Get());
+		ThrowIfFailed(m_device->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&m_computeVPipelineState)));
+		NAME_D3D12_OBJECT(m_computeVPipelineState);
 	}
 
 	//创建命令队列、分配器、列表
@@ -321,8 +333,16 @@ void RenderToTexture::populateComputeCommandList()
 	
 	
 	// 分派任务
-	m_computeCommandList->Dispatch(m_width / 8, m_height / 8, 1);
+	m_computeCommandList->Dispatch((UINT)ceilf(m_width / 256), m_height, 1);
+	
+	m_computeCommandList->SetPipelineState(m_computeVPipelineState.Get());
 
+	m_computeCommandList->SetComputeRootSignature(m_computeRootSignature.Get());
+	m_computeCommandList->SetComputeRootDescriptorTable(0, srvhandle);
+	m_computeCommandList->SetComputeRootDescriptorTable(1, uavhandle);
+	m_computeCommandList->Dispatch(m_width, (UINT)ceilf(m_height / 256), 1);
+	m_computeCommandList->SetPipelineState(m_computePipelineState.Get());
+	
 	// 转换资源使其能够被其他着色器使用
 	m_computeCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_computeTexture.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
 	
@@ -351,6 +371,7 @@ void RenderToTexture::CreateBuffer()
 void RenderToTexture::LoadData(_Out_writes_(totalPix) LifeCell* data, UINT totalPix)
 {
 	srand((int)time(0));
+	/*
 	for (int i = 0; i < totalPix; i++) {
 		if (rand() > RAND_MAX / 2) {
 			data[i].state = 1;
@@ -361,5 +382,9 @@ void RenderToTexture::LoadData(_Out_writes_(totalPix) LifeCell* data, UINT total
 			data[i].delay = 256;
 		}
 	}
-
+	*/
+	for (UINT i = 0; i < totalPix; i++) {
+		data[i].state = i%2;
+		data[i].delay = 256;
+	}
 }
