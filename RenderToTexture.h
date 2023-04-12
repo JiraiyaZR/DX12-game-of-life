@@ -34,7 +34,7 @@ protected:
 	void PopulateCommandList();
 	void populateComputeCommandList();
 	void CreateBuffer();
-	void LoadData(_Out_writes_(totalPix) LifeCell* data, UINT totalPix);
+	std::vector<UINT8> RenderToTexture::LoadData();
 
 
 	ComPtr<ID3D12CommandAllocator> m_computeCommandAllocator;

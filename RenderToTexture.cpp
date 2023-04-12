@@ -95,7 +95,13 @@ void RenderToTexture::LoadComputePipeLine()
 		ThrowIfFailed(m_device->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&m_computePipelineState)));
 		NAME_D3D12_OBJECT(m_computePipelineState);
 
-		ThrowIfFailed(D3DCompileFromFile(GetAssetFullPath(L"ComputeShader.hlsl").c_str(), nullptr, nullptr, "Vmain", "cs_5_0", compileFlags, 0, &computeShader, &error));
+		hr = D3DCompileFromFile(GetAssetFullPath(L"ComputeShader.hlsl").c_str(), nullptr, nullptr, "Vmain", "cs_5_0", compileFlags, 0, &computeShader, &error);
+		if (FAILED(hr)) {
+			if (&error != nullptr) {
+				OutputDebugStringA((char*)error->GetBufferPointer());
+			}
+			ThrowIfFailed(hr);
+		}
 		computePsoDesc.CS = CD3DX12_SHADER_BYTECODE(computeShader.Get());
 		ThrowIfFailed(m_device->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&m_computeVPipelineState)));
 		NAME_D3D12_OBJECT(m_computeVPipelineState);
@@ -204,6 +210,7 @@ void RenderToTexture::LoadComputeAssets()
 		
 		//创建两个UAV的数据
 		{
+			/*
 			UINT totalPix = m_width * m_height;
 			std::vector<LifeCell> data;
 			data.resize(totalPix);
@@ -212,6 +219,18 @@ void RenderToTexture::LoadComputeAssets()
 
 			D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(dataSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 			D3D12_RESOURCE_DESC uploadBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(dataSize);
+			*/
+
+			D3D12_RESOURCE_DESC bufferDesc = {};
+			bufferDesc.MipLevels = 1;
+			bufferDesc.Format = DXGI_FORMAT_R8G8_UINT;
+			bufferDesc.Width = m_width;
+			bufferDesc.Height = m_height;
+			bufferDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+			bufferDesc.DepthOrArraySize = 1;
+			bufferDesc.SampleDesc.Count = 1;
+			bufferDesc.SampleDesc.Quality = 0;
+			bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 
 			for (int i = 0; i < numDescriptor - 1; i++) {
 				
@@ -224,19 +243,22 @@ void RenderToTexture::LoadComputeAssets()
 					IID_PPV_ARGS(&m_uavResource[i])));
 				NAME_D3D12_OBJECT_INDEXED(m_uavResource, i);
 
+				const UINT64 uploadBufferSize2 = GetRequiredIntermediateSize(m_uavResource[i].Get(), 0, 1);
 				ThrowIfFailed(m_device->CreateCommittedResource(
 					&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
 					D3D12_HEAP_FLAG_NONE,
-					&uploadBufferDesc,
+					&CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize2),
 					D3D12_RESOURCE_STATE_GENERIC_READ,
 					nullptr,
 					IID_PPV_ARGS(&m_uavUploadResource[i])));
 				NAME_D3D12_OBJECT_INDEXED(m_uavUploadResource, i);
 
+				std::vector<UINT8> uavData = LoadData();
+
 				D3D12_SUBRESOURCE_DATA pixData = {};
-				pixData.pData = reinterpret_cast<UINT8*>(&data[0]);
-				pixData.RowPitch = dataSize;
-				pixData.SlicePitch = pixData.RowPitch;
+				pixData.pData = &uavData[0];
+				pixData.RowPitch = TextureWidth*2;
+				pixData.SlicePitch = pixData.RowPitch * TextureHeight;
 
 				UpdateSubresources<1>(m_computeCommandList.Get(), m_uavResource[i].Get(), m_uavUploadResource[i].Get(), 0, 0, 1, &pixData);
 				m_computeCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_uavResource[i].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
@@ -255,13 +277,9 @@ void RenderToTexture::LoadComputeAssets()
 				m_device->CreateShaderResourceView(m_uavResource[i].Get(), &srvDesc, srvHandle);
 				*/
 				D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-				uavDesc.Format = DXGI_FORMAT_UNKNOWN;
-				uavDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-				uavDesc.Buffer.FirstElement = 0;
-				uavDesc.Buffer.NumElements = totalPix;
-				uavDesc.Buffer.StructureByteStride = sizeof(totalPix);
-				uavDesc.Buffer.CounterOffsetInBytes = 0;
-				uavDesc.Buffer.Flags = D3D12_BUFFER_UAV_FLAG_NONE;
+				uavDesc.Format = DXGI_FORMAT_R8G8_UINT;
+				uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+				uavDesc.Texture2D.MipSlice = 0;
 
 				CD3DX12_CPU_DESCRIPTOR_HANDLE uavHandle(m_computeSrvUavHeap->GetCPUDescriptorHandleForHeapStart(), 2 + i, m_srvUavDescriptorSize);
 
@@ -333,14 +351,14 @@ void RenderToTexture::populateComputeCommandList()
 	
 	
 	// 分派任务
-	m_computeCommandList->Dispatch((UINT)ceilf(m_width / 256), m_height, 1);
+	m_computeCommandList->Dispatch((UINT)ceilf((float)m_width / 256), m_height, 1);
 	
 	m_computeCommandList->SetPipelineState(m_computeVPipelineState.Get());
 
 	m_computeCommandList->SetComputeRootSignature(m_computeRootSignature.Get());
 	m_computeCommandList->SetComputeRootDescriptorTable(0, srvhandle);
 	m_computeCommandList->SetComputeRootDescriptorTable(1, uavhandle);
-	m_computeCommandList->Dispatch(m_width, (UINT)ceilf(m_height / 256), 1);
+	m_computeCommandList->Dispatch(m_width, (UINT)ceilf((float)m_height / 256), 1);
 	m_computeCommandList->SetPipelineState(m_computePipelineState.Get());
 	
 	// 转换资源使其能够被其他着色器使用
@@ -368,23 +386,32 @@ void RenderToTexture::CreateBuffer()
 {
 }
 
-void RenderToTexture::LoadData(_Out_writes_(totalPix) LifeCell* data, UINT totalPix)
+std::vector<UINT8> RenderToTexture::LoadData()
 {
 	srand((int)time(0));
-	/*
-	for (int i = 0; i < totalPix; i++) {
-		if (rand() > RAND_MAX / 2) {
-			data[i].state = 1;
-			data[i].delay = 0;
+
+	const UINT rowPitch = TextureWidth * 2;
+	const UINT textureSize = rowPitch * TextureHeight;
+
+	std::vector<UINT8> data(textureSize);
+	UINT8* pData = &data[0];
+
+	for (UINT n = 0; n < textureSize; n += 2)
+	{
+		if (n < rowPitch || n < rowPitch * (TextureHeight-1)) {
+			if (rand() > RAND_MAX / 2) {
+				pData[n] = 0x01;        // R
+				pData[n + 1] = 0x01;    // G
+			}
+			else {
+				pData[n] = 0x00;        // R
+				pData[n + 1] = 0x01;    // G
+			}
 		}
 		else {
-			data[i].state = 0;
-			data[i].delay = 256;
+			pData[n] = 0x00;        // R
+			pData[n + 1] = 0x00;    // G
 		}
 	}
-	*/
-	for (UINT i = 0; i < totalPix; i++) {
-		data[i].state = i%2;
-		data[i].delay = 256;
-	}
+	return data;
 }
