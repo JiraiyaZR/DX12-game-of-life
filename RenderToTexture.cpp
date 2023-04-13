@@ -230,17 +230,6 @@ void RenderToTexture::LoadComputeAssets()
 
 		//创建两个UAV的数据
 		{
-			/*
-			UINT totalPix = m_width * m_height;
-			std::vector<LifeCell> data;
-			data.resize(totalPix);
-			const UINT dataSize = totalPix * sizeof(LifeCell);
-			LoadData(&data[0], totalPix);
-
-			D3D12_RESOURCE_DESC bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(dataSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-			D3D12_RESOURCE_DESC uploadBufferDesc = CD3DX12_RESOURCE_DESC::Buffer(dataSize);
-			*/
-
 			D3D12_RESOURCE_DESC bufferDesc = {};
 			bufferDesc.MipLevels = 1;
 			bufferDesc.Format = DXGI_FORMAT_R8G8_UINT;
@@ -273,11 +262,7 @@ void RenderToTexture::LoadComputeAssets()
 					IID_PPV_ARGS(&m_uavUploadResource[i])));
 				NAME_D3D12_OBJECT_INDEXED(m_uavUploadResource, i);
 
-
-				byte* Udata = nullptr;
-				UINT size;
-				Udata = readBitMapFile("D:\\SourceFile\\C_Cpp_work\\DirectX\\HelloTexture\\src\\Image.bmp", size);
-				std::vector<UINT8> uavData = LoadData(Udata);
+				std::vector<UINT8> uavData = LoadData();
 
 				D3D12_SUBRESOURCE_DATA pixData = {};
 				pixData.pData = &uavData[0];
@@ -287,19 +272,6 @@ void RenderToTexture::LoadComputeAssets()
 				UpdateSubresources<1>(m_commandList.Get(), m_uavResource[i].Get(), m_uavUploadResource[i].Get(), 0, 0, 1, &pixData);
 				m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_uavResource[i].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 
-				/*
-				D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
-				srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-				srvDesc.Format = DXGI_FORMAT_UNKNOWN;
-				srvDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-				srvDesc.Buffer.FirstElement = 0;
-				srvDesc.Buffer.NumElements = totalPix;
-				srvDesc.Buffer.StructureByteStride = sizeof(LifeCell);
-				srvDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
-
-				CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(m_computeSrvUavHeap->GetCPUDescriptorHandleForHeapStart(), 1 + i, m_srvUavDescriptorSize);
-				m_device->CreateShaderResourceView(m_uavResource[i].Get(), &srvDesc, srvHandle);
-				*/
 				D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
 				uavDesc.Format = DXGI_FORMAT_R8G8_UINT;
 				uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
@@ -392,8 +364,6 @@ void RenderToTexture::populateComputeCommandList()
 	// 清空Allocator,为下一帧做准备
 	ThrowIfFailed(m_computeCommandAllocator->Reset());
 	ThrowIfFailed(m_computeCommandList->Reset(m_computeCommandAllocator.Get(), m_computePipelineState.Get()));
-	// 转换资源
-	//m_computeCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_computeTexture.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 	// 设置根签名
 	m_computeCommandList->SetComputeRootSignature(m_computeRootSignature.Get());
 	
@@ -417,9 +387,6 @@ void RenderToTexture::populateComputeCommandList()
 	m_computeCommandList->Dispatch(TextureWidth, (UINT)ceilf((float)TextureHeight / 256), 1);
 	m_computeCommandList->SetPipelineState(m_computePipelineState.Get());
 	
-	// 转换资源使其能够被其他着色器使用
-	//m_computeCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_computeTexture.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
-	
 	// 关闭命令列表并执行
 	ThrowIfFailed(m_computeCommandList->Close());
 	ID3D12CommandList* ppCommandLists[] = { m_computeCommandList.Get() };
@@ -431,15 +398,11 @@ void RenderToTexture::populateComputeCommandList()
 	ThrowIfFailed(m_computeCommandQueue->Signal(m_computeFences.Get(), currentFenceValue));
 	ThrowIfFailed(m_computeFences->SetEventOnCompletion(currentFenceValue, m_computeFenceEvents));
 	WaitForSingleObject(m_computeFenceEvents, INFINITE);
-
-
-
 }
 
 
-std::vector<UINT8> RenderToTexture::LoadData(byte* bitMapData)
+std::vector<UINT8> RenderToTexture::LoadData()
 {
-	
 	srand((int)time(0));
 
 	const UINT rowPitch = TextureWidth * 2;
@@ -450,44 +413,21 @@ std::vector<UINT8> RenderToTexture::LoadData(byte* bitMapData)
 
 	for (UINT n = 0; n < textureSize; n += 2)
 	{
-		if (n < rowPitch || n < rowPitch * (TextureHeight-1)) {
+		if (n > 200*rowPitch || n < rowPitch * (TextureHeight-200)) {
 			if (rand() > RAND_MAX / 2) {
 				pData[n] = 0x01;        // R
-				pData[n + 1] = 0x01;    // G
+				pData[n + 1] = 0xff;    // G
 			}
 			else {
 				pData[n] = 0x00;        // R
-				pData[n + 1] = 0x01;    // G
+				pData[n + 1] = 0xff;    // G
 			}
 		}
 		else {
 			pData[n] = 0x00;        // R
-			pData[n + 1] = 0x00;    // G
+			pData[n + 1] = 0xff;    // G
 		}
 	}
 	return data;
-	
-	/*
-	
-	const UINT rowPitch = TextureWidth * 2;
-	const UINT textureSize = rowPitch * TextureHeight;
-
-	std::vector<UINT8> data(textureSize);
-	UINT8* pData = &data[0];
-	UINT j = 0;
-	for (UINT n = 0; n < textureSize; n += 2)
-	{
-		if (bitMapData[j] == 0xff) {
-			pData[n] = 0x00;        // R
-			pData[n + 1] = 0x00;    // G
-		}
-		else {
-			pData[n] = 0x01;        // R
-			pData[n + 1] = 0x01;    // G
-		}
-		j += 3;
-	}
-	return data;
-	*/
 }
 

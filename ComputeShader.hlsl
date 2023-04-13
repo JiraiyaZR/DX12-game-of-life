@@ -9,14 +9,16 @@ RWTexture2D<uint2> newState : register(u2);
 
 bool IsAlive(uint x, uint y)
 {
-    if (x < 0) return false;
+    /*
+        if (x < 0) return false;
     if (x > width - 1)
         return false;
     if (y < 0)
         return false;
     if (y > height-1)
         return false;
-    return oldState[uint2(x, y)].x == 1;
+*/
+    return oldState[uint2(x % width, y % height)].x == 1;
 }
 
 [numthreads(256, 1, 1)]
@@ -49,18 +51,19 @@ void Hmain( uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID )
     {
         if (neibor == 3)
         {
-            newState[DTid.xy] = uint2(1, 1);
+            newState[DTid.xy] = uint2(1, 0);
         }
     }
     else
     {
         if (neibor == 2 || neibor==3)
         {
-            newState[DTid.xy] = uint2(1, 1);
+            newState[DTid.xy] = uint2(1, 0);
         }
         else
         {
-            newState[DTid.xy] = uint2(0, 0);
+            uint delay = newState[DTid.xy].y >> 1;
+            newState[DTid.xy] = uint2(0, delay);
         }
     }
    

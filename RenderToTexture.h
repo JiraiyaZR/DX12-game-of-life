@@ -18,7 +18,7 @@ protected:
 	void PopulateCommandList();
 	void populateComputeCommandList();
 	void waitForCompute();
-	std::vector<UINT8> RenderToTexture::LoadData(byte* data);
+	std::vector<UINT8> RenderToTexture::LoadData();
 
 
 	ComPtr<ID3D12CommandAllocator> m_computeCommandAllocator;
