@@ -10,7 +10,6 @@
 //*********************************************************
 
 #include "stdafx.h"
-// #include "D3D12HelloTexture.h"
 #include "RenderToTexture.h"
 
 _Use_decl_annotations_
