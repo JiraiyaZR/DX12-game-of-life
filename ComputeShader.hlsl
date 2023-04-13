@@ -53,6 +53,19 @@ void Hmain( uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID )
         {
             newState[DTid.xy] = uint2(1, 0);
         }
+        else
+        {
+            uint delay = oldState[DTid.xy].y;
+            if (delay == 0)
+            {
+                delay = 0;
+            }
+            else
+            {
+                delay--;
+            }
+            newState[DTid.xy] = uint2(0, delay);
+        }
     }
     else
     {
@@ -62,11 +75,9 @@ void Hmain( uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID )
         }
         else
         {
-            uint delay = newState[DTid.xy].y >> 1;
-            newState[DTid.xy] = uint2(0, delay);
+            newState[DTid.xy] = uint2(0, 255);
         }
     }
-   
 }
 
 [numthreads(1, 256, 1)]
