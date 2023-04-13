@@ -34,8 +34,8 @@ public:
 
 protected:
     static const UINT FrameCount = 2;
-    static const UINT TextureWidth = 1280;
-    static const UINT TextureHeight = 720;
+    UINT TextureWidth;
+    UINT TextureHeight;
     static const UINT TexturePixelSize = 4;    // The number of bytes used to represent a pixel in the texture.
 
     struct Vertex

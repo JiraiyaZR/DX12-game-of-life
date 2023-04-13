@@ -2,6 +2,25 @@
 #include "RenderToTexture.h"
 #include <time.h>
 
+byte* readBitMapFile(const std::string& filename, UINT& size) {
+	FILE* filePtr; // the file pointer
+	auto err = fopen_s(&filePtr, filename.c_str(), "rb");
+	if (filePtr == NULL) {
+		return nullptr;
+	}
+	BITMAPFILEHEADER bitmapFileHeader; // bitmap file header
+	fread(&bitmapFileHeader, sizeof(BITMAPFILEHEADER), 1, filePtr);
+	BITMAPINFOHEADER bitmapInfoHeader; // bitmap info header
+	fread(&bitmapInfoHeader, sizeof(BITMAPINFOHEADER), 1, filePtr);
+	int bitmapImageSize = bitmapInfoHeader.biWidth * bitmapInfoHeader.biHeight * bitmapInfoHeader.biBitCount / 8;
+	size = bitmapImageSize;
+	byte* f_data= new byte[bitmapImageSize];
+	fseek(filePtr, bitmapFileHeader.bfOffBits, SEEK_SET);
+	fread(f_data, 1, bitmapImageSize, filePtr);
+	fclose(filePtr);
+	return f_data;
+}
+
 RenderToTexture::RenderToTexture(UINT width, UINT height, std::wstring name): D3D12HelloTexture(width, height, name)
 {
 	numDescriptor = 3;
@@ -34,7 +53,7 @@ void RenderToTexture::OnRender()
 	m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 
 	// Present the frame.
-	ThrowIfFailed(m_swapChain->Present(1, 0));
+	ThrowIfFailed(m_swapChain->Present(0, 0));
 
 	WaitForPreviousFrame();
 }
@@ -127,6 +146,8 @@ void RenderToTexture::LoadComputePipeLine()
 
 void RenderToTexture::LoadComputeAssets()
 {
+	ThrowIfFailed(m_commandAllocator->Reset());
+	ThrowIfFailed(m_commandList->Reset(m_commandAllocator.Get(), m_pipelineState.Get()));
 	// 创建相应描述符堆
 	{
 		D3D12_DESCRIPTOR_HEAP_DESC srvUavHeapDesc = {};
@@ -144,8 +165,8 @@ void RenderToTexture::LoadComputeAssets()
 			D3D12_RESOURCE_DESC textureDesc = {};
 			textureDesc.MipLevels = 1;
 			textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-			textureDesc.Width = m_width;
-			textureDesc.Height = m_height;
+			textureDesc.Width = TextureWidth;
+			textureDesc.Height = TextureHeight;
 			textureDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 			textureDesc.DepthOrArraySize = 1;
 			textureDesc.SampleDesc.Count = 1;
@@ -163,7 +184,6 @@ void RenderToTexture::LoadComputeAssets()
 
 			const UINT64 uploadBufferSize = GetRequiredIntermediateSize(m_computeTexture.Get(), 0, 1);
 
-			ComPtr<ID3D12Resource> texUploadHeap;
 			// Create the GPU upload buffer.
 			ThrowIfFailed(m_device->CreateCommittedResource(
 				&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
@@ -184,7 +204,7 @@ void RenderToTexture::LoadComputeAssets()
 			textureData.SlicePitch = textureData.RowPitch * TextureHeight;
 
 			UpdateSubresources(m_commandList.Get(), m_computeTexture.Get(), texUploadHeap.Get(), 0, 0, 1, &textureData);
-			m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_computeTexture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+			m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_computeTexture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 		}
 		
 		//创建纹理资源的SRV
@@ -196,18 +216,18 @@ void RenderToTexture::LoadComputeAssets()
 			srvDesc.Texture2D.MipLevels = 1;
 			m_device->CreateShaderResourceView(m_computeTexture.Get(), &srvDesc, m_computeSrvUavHeap->GetCPUDescriptorHandleForHeapStart());
 		}
-		
+
 		//创建纹理资源的UAV
 		{
 			D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
 			uavDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
 			uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
 			uavDesc.Texture2D.MipSlice = 0;
-			
+
 			CD3DX12_CPU_DESCRIPTOR_HANDLE uavHandle(m_computeSrvUavHeap->GetCPUDescriptorHandleForHeapStart(), 1, m_srvUavDescriptorSize);
 			m_device->CreateUnorderedAccessView(m_computeTexture.Get(), nullptr, &uavDesc, uavHandle);
 		}
-		
+
 		//创建两个UAV的数据
 		{
 			/*
@@ -224,8 +244,8 @@ void RenderToTexture::LoadComputeAssets()
 			D3D12_RESOURCE_DESC bufferDesc = {};
 			bufferDesc.MipLevels = 1;
 			bufferDesc.Format = DXGI_FORMAT_R8G8_UINT;
-			bufferDesc.Width = m_width;
-			bufferDesc.Height = m_height;
+			bufferDesc.Width = TextureWidth;
+			bufferDesc.Height = TextureHeight;
 			bufferDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 			bufferDesc.DepthOrArraySize = 1;
 			bufferDesc.SampleDesc.Count = 1;
@@ -233,7 +253,7 @@ void RenderToTexture::LoadComputeAssets()
 			bufferDesc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
 
 			for (int i = 0; i < numDescriptor - 1; i++) {
-				
+
 				ThrowIfFailed(m_device->CreateCommittedResource(
 					&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
 					D3D12_HEAP_FLAG_NONE,
@@ -253,15 +273,19 @@ void RenderToTexture::LoadComputeAssets()
 					IID_PPV_ARGS(&m_uavUploadResource[i])));
 				NAME_D3D12_OBJECT_INDEXED(m_uavUploadResource, i);
 
-				std::vector<UINT8> uavData = LoadData();
+
+				byte* Udata = nullptr;
+				UINT size;
+				Udata = readBitMapFile("D:\\SourceFile\\C_Cpp_work\\DirectX\\HelloTexture\\src\\Image.bmp", size);
+				std::vector<UINT8> uavData = LoadData(Udata);
 
 				D3D12_SUBRESOURCE_DATA pixData = {};
 				pixData.pData = &uavData[0];
-				pixData.RowPitch = TextureWidth*2;
+				pixData.RowPitch = TextureWidth * 2;
 				pixData.SlicePitch = pixData.RowPitch * TextureHeight;
 
-				UpdateSubresources<1>(m_computeCommandList.Get(), m_uavResource[i].Get(), m_uavUploadResource[i].Get(), 0, 0, 1, &pixData);
-				m_computeCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_uavResource[i].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+				UpdateSubresources<1>(m_commandList.Get(), m_uavResource[i].Get(), m_uavUploadResource[i].Get(), 0, 0, 1, &pixData);
+				m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_uavResource[i].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 
 				/*
 				D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -285,9 +309,38 @@ void RenderToTexture::LoadComputeAssets()
 
 				m_device->CreateUnorderedAccessView(m_uavResource[i].Get(), nullptr, &uavDesc, uavHandle);
 			}
-			
+
 		}
 
+	}
+	//执行图形队列中的命令
+	{
+		ThrowIfFailed(m_commandList->Close());
+		ID3D12CommandList* ppCommandLists[] = { m_commandList.Get() };
+		m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+		// Wait until initialization is complete.
+		WaitForPreviousFrame();
+	}
+	//执行计算队列中的命令
+	{
+		ThrowIfFailed(m_computeCommandList->Close());
+		ID3D12CommandList* ppCommandLists[] = { m_computeCommandList.Get() };
+		m_computeCommandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+		// Wait until initialization is complete.
+		waitForCompute();
+	}
+}
+
+void RenderToTexture::waitForCompute() {
+	const UINT64 fence =m_computeFenceValue;
+	ThrowIfFailed(m_computeCommandQueue->Signal(m_computeFences.Get(), fence));
+	m_computeFenceValue++;
+
+	// Wait until the previous frame is finished.
+	if (m_computeFences->GetCompletedValue() < fence)
+	{
+		ThrowIfFailed(m_computeFences->SetEventOnCompletion(fence, m_fenceEvent));
+		WaitForSingleObject(m_computeFenceEvents, INFINITE);
 	}
 }
 
@@ -308,7 +361,7 @@ void RenderToTexture::PopulateCommandList()
 
 	ID3D12DescriptorHeap* ppHeaps[] = { m_computeSrvUavHeap.Get() };
 	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-	m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_computeTexture.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
+	m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_computeTexture.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
 
 	m_commandList->SetGraphicsRootDescriptorTable(0, m_computeSrvUavHeap->GetGPUDescriptorHandleForHeapStart());
 	m_commandList->RSSetViewports(1, &m_viewport);
@@ -329,15 +382,18 @@ void RenderToTexture::PopulateCommandList()
 
 	// Indicate that the back buffer will now be used to present.
 	m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT));
-	m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_computeTexture.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+	m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_computeTexture.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 
 	ThrowIfFailed(m_commandList->Close());
 }
 
 void RenderToTexture::populateComputeCommandList()
 {
+	// 清空Allocator,为下一帧做准备
+	ThrowIfFailed(m_computeCommandAllocator->Reset());
+	ThrowIfFailed(m_computeCommandList->Reset(m_computeCommandAllocator.Get(), m_computePipelineState.Get()));
 	// 转换资源
-	m_computeCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_computeTexture.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+	//m_computeCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_computeTexture.Get(), D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 	// 设置根签名
 	m_computeCommandList->SetComputeRootSignature(m_computeRootSignature.Get());
 	
@@ -351,18 +407,18 @@ void RenderToTexture::populateComputeCommandList()
 	
 	
 	// 分派任务
-	m_computeCommandList->Dispatch((UINT)ceilf((float)m_width / 256), m_height, 1);
+	m_computeCommandList->Dispatch((UINT)ceilf((float)TextureWidth / 256), TextureHeight, 1);
 	
 	m_computeCommandList->SetPipelineState(m_computeVPipelineState.Get());
 
 	m_computeCommandList->SetComputeRootSignature(m_computeRootSignature.Get());
 	m_computeCommandList->SetComputeRootDescriptorTable(0, srvhandle);
 	m_computeCommandList->SetComputeRootDescriptorTable(1, uavhandle);
-	m_computeCommandList->Dispatch(m_width, (UINT)ceilf((float)m_height / 256), 1);
+	m_computeCommandList->Dispatch(TextureWidth, (UINT)ceilf((float)TextureHeight / 256), 1);
 	m_computeCommandList->SetPipelineState(m_computePipelineState.Get());
 	
 	// 转换资源使其能够被其他着色器使用
-	m_computeCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_computeTexture.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE));
+	//m_computeCommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_computeTexture.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
 	
 	// 关闭命令列表并执行
 	ThrowIfFailed(m_computeCommandList->Close());
@@ -376,18 +432,14 @@ void RenderToTexture::populateComputeCommandList()
 	ThrowIfFailed(m_computeFences->SetEventOnCompletion(currentFenceValue, m_computeFenceEvents));
 	WaitForSingleObject(m_computeFenceEvents, INFINITE);
 
-	// 清空Allocator,为下一帧做准备
-	ThrowIfFailed(m_computeCommandAllocator->Reset());
-	ThrowIfFailed(m_computeCommandList->Reset(m_computeCommandAllocator.Get(), m_computePipelineState.Get()));
+
 
 }
 
-void RenderToTexture::CreateBuffer()
-{
-}
 
-std::vector<UINT8> RenderToTexture::LoadData()
+std::vector<UINT8> RenderToTexture::LoadData(byte* bitMapData)
 {
+	
 	srand((int)time(0));
 
 	const UINT rowPitch = TextureWidth * 2;
@@ -414,4 +466,28 @@ std::vector<UINT8> RenderToTexture::LoadData()
 		}
 	}
 	return data;
+	
+	/*
+	
+	const UINT rowPitch = TextureWidth * 2;
+	const UINT textureSize = rowPitch * TextureHeight;
+
+	std::vector<UINT8> data(textureSize);
+	UINT8* pData = &data[0];
+	UINT j = 0;
+	for (UINT n = 0; n < textureSize; n += 2)
+	{
+		if (bitMapData[j] == 0xff) {
+			pData[n] = 0x00;        // R
+			pData[n + 1] = 0x00;    // G
+		}
+		else {
+			pData[n] = 0x01;        // R
+			pData[n + 1] = 0x01;    // G
+		}
+		j += 3;
+	}
+	return data;
+	*/
 }
+

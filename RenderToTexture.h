@@ -12,29 +12,13 @@ public:
 	virtual void OnDestroy();
 
 protected:
-	enum ComputeRootParameters :UINT32 {
-		ComputeRootSRVTable = 0,
-		ComputeRootUAVTable = 3,
-		ComputeRootParameterCount = 6
-	};
-
-	enum DescriptorHeapIndex :UINT32 {
-		i_UAV = 0,
-		i_SRV = i_UAV + 3,
-		DescriptorCount = i_SRV + 3
-	};
-
-	struct LifeCell {
-		UINT state;
-		UINT delay;
-	};
 
 	void LoadComputePipeLine();
 	void LoadComputeAssets();
 	void PopulateCommandList();
 	void populateComputeCommandList();
-	void CreateBuffer();
-	std::vector<UINT8> RenderToTexture::LoadData();
+	void waitForCompute();
+	std::vector<UINT8> RenderToTexture::LoadData(byte* data);
 
 
 	ComPtr<ID3D12CommandAllocator> m_computeCommandAllocator;
@@ -53,11 +37,10 @@ protected:
 	HANDLE m_computeFenceEvents;
 
 	
-	ComPtr<ID3D12Resource> m_computeTexture;
+	ComPtr<ID3D12Resource> m_computeTexture; 
+	ComPtr<ID3D12Resource> texUploadHeap;
 	ComPtr<ID3D12Resource> m_uavResource[2];
 	ComPtr<ID3D12Resource> m_uavUploadResource[2];
-	
-
 
 };
 

@@ -65,4 +65,12 @@
       <Filter>Assets\Shaders</Filter>
     </CustomBuild>
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="Texture.dds">
+      <Filter>Assets</Filter>
+    </Image>
+    <Image Include="Image.bmp">
+      <Filter>Assets</Filter>
+    </Image>
+  </ItemGroup>
 </Project>
