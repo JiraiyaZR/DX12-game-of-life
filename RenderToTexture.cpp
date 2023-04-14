@@ -21,6 +21,33 @@ byte* readBitMapFile(const std::string& filename, UINT& size) {
 	return f_data;
 }
 
+std::vector<uint32_t> loadSamplerTex() {
+	const uint32_t colorTable[] = {0xff911c71,0xffd900ea,0xffc6bd0a,0xff7c3e13,0xff331809,0xff030100};
+	std::vector<uint32_t> data;
+	data.resize(256);
+	for (int i = 0; i < 256; i++) {
+		if (i < 2) {
+			data[i] = colorTable[0];
+		}
+		else if (i < 16) {
+			data[i] = colorTable[1];
+		}
+		else if (i < 32) {
+			data[i] = colorTable[2];
+		}
+		else if (i < 64) {
+			data[i] = colorTable[3];
+		}
+		else if (i < 128) {
+			data[i] = colorTable[4];
+		}
+		else {
+			data[i] = colorTable[5];
+		}
+	}
+	return data;
+}
+
 RenderToTexture::RenderToTexture(UINT width, UINT height, std::wstring name): D3D12HelloTexture(width, height, name)
 {
 	numDescriptor = 3;
@@ -53,7 +80,7 @@ void RenderToTexture::OnRender()
 	m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 
 	// Present the frame.
-	ThrowIfFailed(m_swapChain->Present(0, 0));
+	ThrowIfFailed(m_swapChain->Present(1, 0));
 
 	WaitForPreviousFrame();
 }
@@ -71,16 +98,18 @@ void RenderToTexture::LoadComputePipeLine()
 {
 	//创建根参数
 	{
-		CD3DX12_DESCRIPTOR_RANGE ranges[2] = {};
-		CD3DX12_ROOT_PARAMETER rootParameters[2] = {};
+		CD3DX12_DESCRIPTOR_RANGE ranges[3] = {};
+		CD3DX12_ROOT_PARAMETER rootParameters[3] = {};
 
-		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+		ranges[0].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);//s(0)-s(1)
 		rootParameters[0].InitAsDescriptorTable(1, &ranges[0], D3D12_SHADER_VISIBILITY_ALL);
-		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, 0);
+		ranges[1].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, 0);//u(0)-u(2)
 		rootParameters[1].InitAsDescriptorTable(1, &ranges[1], D3D12_SHADER_VISIBILITY_ALL);
+		ranges[2].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 1);//t(1)
+		rootParameters[2].InitAsDescriptorTable(1, &ranges[2], D3D12_SHADER_VISIBILITY_ALL);
 		
 	
-		CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc(2, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+		CD3DX12_ROOT_SIGNATURE_DESC rootSignatureDesc(3, rootParameters, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 		ComPtr<ID3DBlob> serializedRootSig = nullptr;
 		ComPtr<ID3DBlob> errorBlob = nullptr;
@@ -151,7 +180,7 @@ void RenderToTexture::LoadComputeAssets()
 	// 创建相应描述符堆
 	{
 		D3D12_DESCRIPTOR_HEAP_DESC srvUavHeapDesc = {};
-		srvUavHeapDesc.NumDescriptors = 4;
+		srvUavHeapDesc.NumDescriptors = 5;
 		srvUavHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 		srvUavHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 		ThrowIfFailed(m_device->CreateDescriptorHeap(&srvUavHeapDesc, IID_PPV_ARGS(&m_computeSrvUavHeap)));
@@ -224,7 +253,7 @@ void RenderToTexture::LoadComputeAssets()
 			uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
 			uavDesc.Texture2D.MipSlice = 0;
 
-			CD3DX12_CPU_DESCRIPTOR_HANDLE uavHandle(m_computeSrvUavHeap->GetCPUDescriptorHandleForHeapStart(), 1, m_srvUavDescriptorSize);
+			CD3DX12_CPU_DESCRIPTOR_HANDLE uavHandle(m_computeSrvUavHeap->GetCPUDescriptorHandleForHeapStart(), 2, m_srvUavDescriptorSize);
 			m_device->CreateUnorderedAccessView(m_computeTexture.Get(), nullptr, &uavDesc, uavHandle);
 		}
 
@@ -277,11 +306,64 @@ void RenderToTexture::LoadComputeAssets()
 				uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
 				uavDesc.Texture2D.MipSlice = 0;
 
-				CD3DX12_CPU_DESCRIPTOR_HANDLE uavHandle(m_computeSrvUavHeap->GetCPUDescriptorHandleForHeapStart(), 2 + i, m_srvUavDescriptorSize);
+				CD3DX12_CPU_DESCRIPTOR_HANDLE uavHandle(m_computeSrvUavHeap->GetCPUDescriptorHandleForHeapStart(), 3 + i, m_srvUavDescriptorSize);
 
 				m_device->CreateUnorderedAccessView(m_uavResource[i].Get(), nullptr, &uavDesc, uavHandle);
 			}
 
+		}
+		// 创建采样器
+		{
+			D3D12_SAMPLER_DESC sampler = {};
+			sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+			sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+			sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+			sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+			sampler.MipLODBias = 0;
+			sampler.MaxAnisotropy = 0;
+			sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
+			sampler.MinLOD = 0.0f;
+			sampler.MaxLOD = D3D12_FLOAT32_MAX;
+
+			D3D12_DESCRIPTOR_HEAP_DESC samplerHeapDesc = {};
+			samplerHeapDesc.NumDescriptors = 1;
+			samplerHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
+			samplerHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+
+			ThrowIfFailed(m_device->CreateDescriptorHeap(&samplerHeapDesc, IID_PPV_ARGS(&m_computeSamplerHeap)));
+			m_device->CreateSampler(&sampler, m_computeSamplerHeap->GetCPUDescriptorHandleForHeapStart());
+
+			D3D12_RESOURCE_DESC sampleTexDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, 256, 1, 1, 1);
+			ThrowIfFailed(m_device->CreateCommittedResource(
+				&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+				D3D12_HEAP_FLAG_NONE,
+				&sampleTexDesc,
+				D3D12_RESOURCE_STATE_COMMON,
+				nullptr,
+				IID_PPV_ARGS(&m_sampler)));
+
+			const UINT64 uploadBufferSize = GetRequiredIntermediateSize(m_sampler.Get(), 0, 1);
+
+			ThrowIfFailed(m_device->CreateCommittedResource(
+				&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
+				D3D12_HEAP_FLAG_NONE,
+				&CD3DX12_RESOURCE_DESC::Buffer(uploadBufferSize),
+				D3D12_RESOURCE_STATE_GENERIC_READ,
+				nullptr,
+				IID_PPV_ARGS(&m_samplerUpload)));
+
+			auto samplerData = loadSamplerTex();
+			D3D12_SUBRESOURCE_DATA samplerTex = {};
+			samplerTex.pData = &samplerData[0];
+			samplerTex.RowPitch = static_cast<LONG_PTR>(sampleTexDesc.Width * sizeof(uint32_t));
+			samplerTex.SlicePitch = 1;
+
+			m_commandList->ResourceBarrier(1,&CD3DX12_RESOURCE_BARRIER::Transition(m_sampler.Get(), D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST));
+			UpdateSubresources<1>(m_commandList.Get(), m_sampler.Get(), m_samplerUpload.Get(), 0, 0, 1, &samplerTex);
+			m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_sampler.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
+			
+			CD3DX12_CPU_DESCRIPTOR_HANDLE srvHandle(m_computeSrvUavHeap->GetCPUDescriptorHandleForHeapStart(), 1, m_srvUavDescriptorSize);
+			m_device->CreateShaderResourceView(m_sampler.Get(), nullptr, srvHandle);
 		}
 
 	}
@@ -368,13 +450,15 @@ void RenderToTexture::populateComputeCommandList()
 	m_computeCommandList->SetComputeRootSignature(m_computeRootSignature.Get());
 	
 	// 绑定资源
-	ID3D12DescriptorHeap* ppHeaps[] = { m_computeSrvUavHeap.Get() };
+	ID3D12DescriptorHeap* ppHeaps[] = { m_computeSrvUavHeap.Get(), m_computeSamplerHeap.Get()};
 	m_computeCommandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
 	CD3DX12_GPU_DESCRIPTOR_HANDLE srvhandle(m_computeSrvUavHeap->GetGPUDescriptorHandleForHeapStart());
-	CD3DX12_GPU_DESCRIPTOR_HANDLE uavhandle(m_computeSrvUavHeap->GetGPUDescriptorHandleForHeapStart(), 1, m_srvUavDescriptorSize);
+	CD3DX12_GPU_DESCRIPTOR_HANDLE uavhandle(m_computeSrvUavHeap->GetGPUDescriptorHandleForHeapStart(), 2, m_srvUavDescriptorSize);
+	CD3DX12_GPU_DESCRIPTOR_HANDLE samplerhandle(m_computeSamplerHeap->GetGPUDescriptorHandleForHeapStart());
+	
 	m_computeCommandList->SetComputeRootDescriptorTable(0, srvhandle);
 	m_computeCommandList->SetComputeRootDescriptorTable(1, uavhandle);
-	
+	m_computeCommandList->SetComputeRootDescriptorTable(2, samplerhandle);
 	
 	// 分派任务
 	m_computeCommandList->Dispatch((UINT)ceilf((float)TextureWidth / 256), TextureHeight, 1);

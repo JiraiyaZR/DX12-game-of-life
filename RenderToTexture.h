@@ -28,6 +28,8 @@ protected:
 	ComPtr<ID3D12PipelineState> m_computeVPipelineState;
 	ComPtr<ID3D12DescriptorHeap> m_computeSrvUavHeap;
 	ComPtr<ID3D12DescriptorHeap> m_computeUavHeap;
+	ComPtr<ID3D12DescriptorHeap> m_computeSamplerHeap;
+
 	UINT m_srvUavDescriptorSize;
 	UINT numDescriptor;
 
@@ -40,6 +42,8 @@ protected:
 	ComPtr<ID3D12Resource> texUploadHeap;
 	ComPtr<ID3D12Resource> m_uavResource[2];
 	ComPtr<ID3D12Resource> m_uavUploadResource[2];
+	ComPtr<ID3D12Resource> m_sampler;
+	ComPtr<ID3D12Resource> m_samplerUpload;
 
 };
 

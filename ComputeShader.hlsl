@@ -1,6 +1,8 @@
 #define width 2560
 #define height 1440
 
+SamplerState Texsampler : register(s1);
+Texture2D colorTex : register(t1);
 RWTexture2D<float4> outputRW : register(u0);
 RWTexture2D<uint2> oldState : register(u1);
 RWTexture2D<uint2> newState : register(u2);
@@ -23,16 +25,18 @@ bool IsAlive(uint x, uint y)
 
 [numthreads(256, 1, 1)]
 void Hmain( uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID )
-{    
-    float4 white = float4(1, 1, 1, 1);
-    float4 black = float4(0, 0, 0, 1);
+{   
     if (oldState[DTid.xy].x == 1)
     {
-        outputRW[DTid.xy] = white;
+        float loc = (float) oldState[DTid.xy].y / 255.0f;
+        float4 sampledColor = colorTex.SampleLevel(Texsampler, float2(loc, 0.5f), 0);
+        outputRW[DTid.xy] = float4(1/113,1/28,1/145,1);
     }
     else
     {
-        outputRW[DTid.xy] = black;
+        float loc = (float) oldState[DTid.xy].y / 255.0f;
+        float4 sampledColor = colorTex.SampleLevel(Texsampler, float2(loc, 0.5f), 0);
+        outputRW[DTid.xy] = sampledColor;
     }
     
     
@@ -56,13 +60,13 @@ void Hmain( uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID )
         else
         {
             uint delay = oldState[DTid.xy].y;
-            if (delay == 0)
+            if (delay == 255)
             {
-                delay = 0;
+                delay = 255;
             }
             else
             {
-                delay--;
+                delay++;
             }
             newState[DTid.xy] = uint2(0, delay);
         }
@@ -75,7 +79,7 @@ void Hmain( uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID )
         }
         else
         {
-            newState[DTid.xy] = uint2(0, 255);
+            newState[DTid.xy] = uint2(0, 1);
         }
     }
 }
