@@ -80,7 +80,7 @@ void RenderToTexture::OnRender()
 	m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
 
 	// Present the frame.
-	ThrowIfFailed(m_swapChain->Present(1, 0));
+	ThrowIfFailed(m_swapChain->Present(0, 0));
 
 	WaitForPreviousFrame();
 }
@@ -468,7 +468,7 @@ void RenderToTexture::populateComputeCommandList()
 	m_computeCommandList->SetComputeRootSignature(m_computeRootSignature.Get());
 	m_computeCommandList->SetComputeRootDescriptorTable(0, srvhandle);
 	m_computeCommandList->SetComputeRootDescriptorTable(1, uavhandle);
-	m_computeCommandList->Dispatch(TextureWidth, (UINT)ceilf((float)TextureHeight / 256), 1);
+	m_computeCommandList->Dispatch((UINT)ceilf((float)TextureWidth / 256), TextureHeight, 1);
 	m_computeCommandList->SetPipelineState(m_computePipelineState.Get());
 	
 	// 关闭命令列表并执行
@@ -497,7 +497,7 @@ std::vector<UINT8> RenderToTexture::LoadData()
 
 	for (UINT n = 0; n < textureSize; n += 2)
 	{
-		if (n > 200*rowPitch || n < rowPitch * (TextureHeight-200)) {
+		if (n > rowPitch*(TextureHeight-1)) {
 			if (rand() > RAND_MAX / 2) {
 				pData[n] = 0x01;        // R
 				pData[n + 1] = 0xff;    // G
