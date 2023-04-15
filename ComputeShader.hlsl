@@ -1,9 +1,3 @@
-/*
-#define width 2560
-#define height 1440
-#define board 1200
-*/
-groupshared uint2 oldCache[256];
 SamplerState Texsampler : register(s1);
 Texture2D colorTex : register(t1);
 RWTexture2D<float4> outputRW : register(u0);
@@ -20,16 +14,27 @@ cbuffer cb : register(b0)
 
 bool IsAlive(uint x, uint y)
 {
-    /*if (x < 0) return false;
-    if (x > width - 1) return false;*/
+    if (x < 0)
+        return false;
+    if (x > width - 1)
+        return false;
     if (y < 0)
         return false;
-    if (y > height-1)
+    if (y > height - 1)
         return false;
     return oldState[uint2(x % width, y % height)].x == 1;
 }
 
-void update(uint neibor,uint2 loc)
+bool IsAlive1D(uint x, uint y)
+{
+    if (x < 0)
+        return oldState[uint2(x + 1, y)].x == 1;
+    if (x > width - 1)
+        return oldState[uint2(x - 1, y)].x == 1;
+    return oldState[uint2(x, y)].x == 1;
+}
+
+void update(uint neibor, uint2 loc)
 {
     if (oldState[loc].x == 0)
     {
@@ -65,15 +70,14 @@ void update(uint neibor,uint2 loc)
 }
 
 [numthreads(256, 1, 1)]
-void Hmain( uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID )
-{   
+void Hmain(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
+{
     // 展示上一帧计算的图像
-    float loc = (float) oldState[DTid.xy].y / 9364.0f;
+    float loc = (float) oldState[DTid.xy].y / 9363.0f;
     float4 sampledColor = colorTex.SampleLevel(Texsampler, float2(loc, 0.5f), 0);
     outputRW[DTid.xy] = sampledColor;
-
     
-    if (DTid.y < board*height)
+    if (DTid.y < board * height)
     {
         uint neibor = 0;
         for (int i = -1; i <= 1; i++)
@@ -88,19 +92,19 @@ void Hmain( uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID )
         }
         update(neibor, DTid.xy);
     }
-    else if(DTid.y==height-1)
+    else if (DTid.y == height - 1)
     {
-        uint ruleList[8] = {};
+        uint ruleList[8];
         for (uint j = 0; j < 8; j++)
         {
-            ruleList[7 - j] = (rule >> j) | 0x01;
+            ruleList[j] = (rule >> j) & 0x01;
         }
             
         uint3 exponent = uint3(1, 2, 4);
         uint index = 0;
         for (int i = -1; i <= 1; i++)
         {
-            index += oldState[uint2((DTid.x + i) % width, DTid.y)].x * exponent[i + 1];
+            index += IsAlive1D(DTid.x + i, DTid.y) * exponent[i + 1];
         }
         uint life = ruleList[index];
         update(life * 3, DTid.xy);

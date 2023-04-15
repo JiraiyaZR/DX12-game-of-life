@@ -30,7 +30,7 @@ protected:
 	struct objectConstant {
 		UINT tWidth;	//贴图宽
 		UINT tHeight;	//贴图高
-		float board;		//一维演化和二维演化边界
+		float board;	//一维演化和二维演化边界
 		UINT rule;		//边界下应用的规则
 	};
 
