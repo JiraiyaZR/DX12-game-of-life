@@ -70,7 +70,7 @@ void update(uint neibor, uint2 loc)
 }
 
 [numthreads(256, 1, 1)]
-void Hmain(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
+void CSmain(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
 {
     // 展示上一帧计算的图像
     float loc = (float) oldState[DTid.xy].y / 9363.0f;
@@ -117,7 +117,7 @@ void Hmain(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
 }
 
 [numthreads(256, 1, 1)]
-void Vmain(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
+void stateUpdate(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
 {
     oldState[DTid.xy] = newState[DTid.xy];
 }

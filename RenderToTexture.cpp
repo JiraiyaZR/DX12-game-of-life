@@ -150,7 +150,7 @@ void RenderToTexture::LoadComputePipeLine()
 #else
 		UINT compileFlags = 0;
 #endif
-		auto hr = D3DCompileFromFile(GetAssetFullPath(L"ComputeShader.hlsl").c_str(), nullptr, nullptr, "Hmain", "cs_5_0", compileFlags, 0, &computeShader, &error);
+		auto hr = D3DCompileFromFile(GetAssetFullPath(L"ComputeShader.hlsl").c_str(), nullptr, nullptr, "CSmain", "cs_5_0", compileFlags, 0, &computeShader, &error);
 		if (FAILED(hr)) {
 			if (&error != nullptr) {
 				OutputDebugStringA((char*)error->GetBufferPointer());
@@ -164,7 +164,7 @@ void RenderToTexture::LoadComputePipeLine()
 		ThrowIfFailed(m_device->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&m_computePipelineState)));
 		NAME_D3D12_OBJECT(m_computePipelineState);
 
-		hr = D3DCompileFromFile(GetAssetFullPath(L"ComputeShader.hlsl").c_str(), nullptr, nullptr, "Vmain", "cs_5_0", compileFlags, 0, &computeShader, &error);
+		hr = D3DCompileFromFile(GetAssetFullPath(L"ComputeShader.hlsl").c_str(), nullptr, nullptr, "stateUpdate", "cs_5_0", compileFlags, 0, &computeShader, &error);
 		if (FAILED(hr)) {
 			if (&error != nullptr) {
 				OutputDebugStringA((char*)error->GetBufferPointer());
