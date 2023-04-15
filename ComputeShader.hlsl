@@ -12,8 +12,10 @@ cbuffer cb : register(b0)
     uint rule;
 }
 
+//判断二维平面上cell的死活
 bool IsAlive(uint x, uint y)
 {
+    // 通过注释不同的条件语句实现不同的边界情况
     if (x < 0)
         return false;
     if (x > width - 1)
@@ -25,8 +27,10 @@ bool IsAlive(uint x, uint y)
     return oldState[uint2(x % width, y % height)].x == 1;
 }
 
+// 底部一维元胞自动机死活判断
 bool IsAlive1D(uint x, uint y)
 {
+    // 边界外细胞死活等同于边界处
     if (x < 0)
         return oldState[uint2(x + 1, y)].x == 1;
     if (x > width - 1)
@@ -34,6 +38,7 @@ bool IsAlive1D(uint x, uint y)
     return oldState[uint2(x, y)].x == 1;
 }
 
+// 更新死活状态
 void update(uint neibor, uint2 loc)
 {
     if (oldState[loc].x == 0)
@@ -44,6 +49,7 @@ void update(uint neibor, uint2 loc)
         }
         else
         {
+            //延迟用于控制其呈现不同颜色
             uint delay = oldState[loc].y;
             if (delay == 9364)
             {
@@ -77,6 +83,7 @@ void CSmain(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
     float4 sampledColor = colorTex.SampleLevel(Texsampler, float2(loc, 0.5f), 0);
     outputRW[DTid.xy] = sampledColor;
     
+    // 边界上方的应用b23规则
     if (DTid.y < board * height)
     {
         uint neibor = 0;
@@ -92,6 +99,7 @@ void CSmain(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
         }
         update(neibor, DTid.xy);
     }
+    // 最底部应用一维规则
     else if (DTid.y == height - 1)
     {
         uint ruleList[8];
@@ -109,6 +117,7 @@ void CSmain(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
         uint life = ruleList[index];
         update(life * 3, DTid.xy);
     }
+    //其余的部分通过上移得到
     else
     {
         newState[DTid.xy] = oldState[uint2(DTid.x, DTid.y + 1)];
@@ -119,5 +128,6 @@ void CSmain(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
 [numthreads(256, 1, 1)]
 void stateUpdate(uint3 DTid : SV_DispatchThreadID, uint3 GTid : SV_GroupThreadID)
 {
+    // 更新状态
     oldState[DTid.xy] = newState[DTid.xy];
 }

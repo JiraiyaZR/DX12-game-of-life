@@ -12,19 +12,13 @@ public:
 	virtual void OnDestroy();
 	virtual void OnKeyDown(UINT8 key);
 
-protected:
-
+private:
 	void LoadComputePipeLine();
 	void LoadComputeAssets();
 	void PopulateCommandList();
 	void populateComputeCommandList();
 	void waitForCompute();
 	std::vector<UINT8> LoadData();
-
-	struct lifeCell {
-		bool isAlive;
-		UINT16 delay;
-	};
 
 	//常量数据
 	struct objectConstant {
@@ -34,17 +28,16 @@ protected:
 		UINT rule;		//边界下应用的规则
 	};
 
-	bool IsVSync;
+	bool IsVSync;		//是否启用垂直同步
 
 	ComPtr<ID3D12CommandAllocator> m_computeCommandAllocator;
 	ComPtr<ID3D12CommandQueue> m_computeCommandQueue;
 	ComPtr<ID3D12RootSignature> m_computeRootSignature;
 	ComPtr<ID3D12GraphicsCommandList> m_computeCommandList;
-	ComPtr<ID3D12PipelineState> m_computePipelineState;
-	ComPtr<ID3D12PipelineState> m_computeVPipelineState;
+	ComPtr<ID3D12PipelineState> m_computePipelineState;		//负责计算的PSO
+	ComPtr<ID3D12PipelineState> m_computePipelineState2;	//负责更新状态的PSO
 	ComPtr<ID3D12DescriptorHeap> m_computeCbvSrvUavHeap;
 	ComPtr<ID3D12DescriptorHeap> m_computeSamplerHeap;
-	ComPtr<ID3D12DescriptorHeap> m_constHeap;
 
 	UINT m_srvUavDescriptorSize;
 	static UINT colorMapSize;
@@ -57,16 +50,16 @@ protected:
 	HANDLE m_computeFenceEvents;
 
 	
-	ComPtr<ID3D12Resource> m_computeTexture; 
-	ComPtr<ID3D12Resource> texUploadHeap;
-	ComPtr<ID3D12Resource> m_uavResource[2];
-	ComPtr<ID3D12Resource> m_uavUploadResource[2];
-	ComPtr<ID3D12Resource> m_sampler;
-	ComPtr<ID3D12Resource> m_samplerUpload;
-	ComPtr<ID3D12Resource> m_constUpload;
+	ComPtr<ID3D12Resource> m_computeTexture;		//用于CS、PS
+	ComPtr<ID3D12Resource> texUploadHeap;			//用于复制贴图数据的上传堆
+	ComPtr<ID3D12Resource> m_uavResource[2];		//用于CS，分别保存cell的新旧状态
+	ComPtr<ID3D12Resource> m_uavUploadResource[2];	//对应上传堆
+	ComPtr<ID3D12Resource> m_sampler;				//也是贴图资源，位于SRV，用于给采样器采样获得颜色数据
+	ComPtr<ID3D12Resource> m_samplerUpload;			//对应上传堆
+	ComPtr<ID3D12Resource> m_constUpload;			//常量缓冲区的上传堆
 
 
-
+	//根签名结构
 	enum RootParameters : uint32_t
 	{
 		e_rootParameterCB = 0,
@@ -75,14 +68,14 @@ protected:
 		e_rootParameterUAV,
 		e_numRootParameters
 	};
-
+	// cbv_srv_uav缓冲区的各个类型数量
 	enum DescriptorHeapCount : uint32_t
 	{
 		e_cCB = 1,
 		e_cSRV = 2,
 		e_cUAV = 3,
 	};
-
+	//各类型在cbv_srv_uav中的序号
 	enum DescriptorHeapIndex : uint32_t
 	{
 		e_iCB = 0,

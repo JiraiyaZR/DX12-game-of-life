@@ -2,26 +2,8 @@
 #include "RenderToTexture.h"
 #include <time.h>
 
-byte* readBitMapFile(const std::string& filename, UINT& size) {
-	FILE* filePtr; // the file pointer
-	auto err = fopen_s(&filePtr, filename.c_str(), "rb");
-	if (filePtr == NULL) {
-		return nullptr;
-	}
-	BITMAPFILEHEADER bitmapFileHeader; // bitmap file header
-	fread(&bitmapFileHeader, sizeof(BITMAPFILEHEADER), 1, filePtr);
-	BITMAPINFOHEADER bitmapInfoHeader; // bitmap info header
-	fread(&bitmapInfoHeader, sizeof(BITMAPINFOHEADER), 1, filePtr);
-	int bitmapImageSize = bitmapInfoHeader.biWidth * bitmapInfoHeader.biHeight * bitmapInfoHeader.biBitCount / 8;
-	size = bitmapImageSize;
-	byte* f_data= new byte[bitmapImageSize];
-	fseek(filePtr, bitmapFileHeader.bfOffBits, SEEK_SET);
-	fread(f_data, 1, bitmapImageSize, filePtr);
-	fclose(filePtr);
-	return f_data;
-}
-
 void createGradientColor(std::vector<uint32_t>& data, uint32_t colorBefore, uint32_t colorAfter, int length) {
+	// 从给定的颜色生成渐变色
 	// 从32位数据中提取rgb分量
 	byte Rb = colorBefore & 0xff;
 	byte Gb = (colorBefore >> 8) & 0xff;
@@ -44,7 +26,9 @@ void createGradientColor(std::vector<uint32_t>& data, uint32_t colorBefore, uint
 }
 
 std::vector<uint32_t> loadSamplerTex() {
-	const uint32_t colorTable[] = {0xff911c71,0xffd900ea,0xffc6bd0a,0xff7c3e13,0xff331809,0xff030100};
+	//生成数据来填充sample贴图
+	//该贴图用于给采样器提供色卡
+	const uint32_t colorTable[] = {0xff911c71,0xffd900ea,0xffc6bd0a,0xff7c3e13,0xff331809,0xff030100};	//颜色顺序为ABGR
 	int duration[] = { 2,16,128,1024,8192 };
 	std::vector<uint32_t> data;
 	data.push_back(0xffffffff);
@@ -72,14 +56,17 @@ RenderToTexture::~RenderToTexture()
 
 void RenderToTexture::OnInit()
 {
+	//利用D3D12HelloTexture示例中的初始化
 	LoadPipeline();
 	LoadAssets();
+	//计算流水线相关初始化
 	LoadComputePipeLine();
 	LoadComputeAssets();
 }
 
 void RenderToTexture::OnUpdate()
 {
+	//更新常量数据
 	memcpy(mMappedData, &m_constData, sizeof(m_constData));
 }
 
@@ -120,13 +107,14 @@ void RenderToTexture::LoadComputePipeLine()
 		CD3DX12_DESCRIPTOR_RANGE ranges[e_numRootParameters] = {};
 		CD3DX12_ROOT_PARAMETER rootParameters[e_numRootParameters] = {};
 
-		ranges[e_rootParameterCB].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);//b(0)
+		ranges[e_rootParameterCB].Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);				//b(0)
+		ranges[e_rootParameterSampler].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 1);		//t(1)
+		ranges[e_rootParameterSRV].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);				//s(0)-s(1)
+		ranges[e_rootParameterUAV].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, 0);				//u(0)-u(2)
+
 		rootParameters[e_rootParameterCB].InitAsDescriptorTable(1, &ranges[e_rootParameterCB], D3D12_SHADER_VISIBILITY_ALL);
-		ranges[e_rootParameterSampler].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER, 1, 1);//t(1)
 		rootParameters[e_rootParameterSampler].InitAsDescriptorTable(1, &ranges[e_rootParameterSampler], D3D12_SHADER_VISIBILITY_ALL);
-		ranges[e_rootParameterSRV].Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);//s(0)-s(1)
 		rootParameters[e_rootParameterSRV].InitAsDescriptorTable(1, &ranges[e_rootParameterSRV], D3D12_SHADER_VISIBILITY_ALL);
-		ranges[e_rootParameterUAV].Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, 0);//u(0)-u(2)
 		rootParameters[e_rootParameterUAV].InitAsDescriptorTable(1, &ranges[e_rootParameterUAV], D3D12_SHADER_VISIBILITY_ALL);
 		
 	
@@ -172,8 +160,8 @@ void RenderToTexture::LoadComputePipeLine()
 			ThrowIfFailed(hr);
 		}
 		computePsoDesc.CS = CD3DX12_SHADER_BYTECODE(computeShader.Get());
-		ThrowIfFailed(m_device->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&m_computeVPipelineState)));
-		NAME_D3D12_OBJECT(m_computeVPipelineState);
+		ThrowIfFailed(m_device->CreateComputePipelineState(&computePsoDesc, IID_PPV_ARGS(&m_computePipelineState2)));
+		NAME_D3D12_OBJECT(m_computePipelineState2);
 	}
 
 	//创建命令队列、分配器、列表
@@ -196,6 +184,7 @@ void RenderToTexture::LoadComputePipeLine()
 
 void RenderToTexture::LoadComputeAssets()
 {
+	//这里还会用到图形管线的命令列表，所以先重置一下
 	ThrowIfFailed(m_commandAllocator->Reset());
 	ThrowIfFailed(m_commandList->Reset(m_commandAllocator.Get(), m_pipelineState.Get()));
 	// 创建相应描述符堆
@@ -210,8 +199,9 @@ void RenderToTexture::LoadComputeAssets()
 	}
 	//创建纹理
 	{
-		//创建纹理资源
+		//m_computeTexture相关
 		{
+			//填写描述符
 			D3D12_RESOURCE_DESC textureDesc = {};
 			textureDesc.MipLevels = 1;
 			textureDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -234,7 +224,6 @@ void RenderToTexture::LoadComputeAssets()
 
 			const UINT64 uploadBufferSize = GetRequiredIntermediateSize(m_computeTexture.Get(), 0, 1);
 
-			// Create the GPU upload buffer.
 			ThrowIfFailed(m_device->CreateCommittedResource(
 				&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD),
 				D3D12_HEAP_FLAG_NONE,
@@ -244,10 +233,10 @@ void RenderToTexture::LoadComputeAssets()
 				IID_PPV_ARGS(&texUploadHeap)));
 			NAME_D3D12_OBJECT(texUploadHeap);
 
-			// Copy data to the intermediate upload heap and then schedule a copy 
-			// from the upload heap to the Texture2D.
+			//生成贴图数据
 			std::vector<UINT8> texture = GenerateTextureData();
 
+			//向上传堆中填充数据，上传堆会将数据提交到默认堆
 			D3D12_SUBRESOURCE_DATA textureData = {};
 			textureData.pData = &texture[0];
 			textureData.RowPitch = TextureWidth * TexturePixelSize;
@@ -257,7 +246,7 @@ void RenderToTexture::LoadComputeAssets()
 			m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_computeTexture.Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
 		}
 		
-		//创建纹理资源的SRV
+		//创建m_computeTexture的SRV
 		{
 			D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
 			srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -268,7 +257,7 @@ void RenderToTexture::LoadComputeAssets()
 			m_device->CreateShaderResourceView(m_computeTexture.Get(), &srvDesc, srvHandle);
 		}
 
-		//创建纹理资源的UAV
+		//创建m_computeTexture的UAV
 		{
 			D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
 			uavDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -279,7 +268,7 @@ void RenderToTexture::LoadComputeAssets()
 			m_device->CreateUnorderedAccessView(m_computeTexture.Get(), nullptr, &uavDesc, uavHandle);
 		}
 
-		//创建两个UAV的数据
+		//创建两个UAV的数据,对应m_uavResource[2]
 		{
 			D3D12_RESOURCE_DESC bufferDesc = {};
 			bufferDesc.MipLevels = 1;
@@ -347,6 +336,7 @@ void RenderToTexture::LoadComputeAssets()
 			sampler.MinLOD = 0.0f;
 			sampler.MaxLOD = D3D12_FLOAT32_MAX;
 
+			//采样器使用的贴图m_sampler
 			D3D12_DESCRIPTOR_HEAP_DESC samplerHeapDesc = {};
 			samplerHeapDesc.NumDescriptors = 1;
 			samplerHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
@@ -358,8 +348,10 @@ void RenderToTexture::LoadComputeAssets()
 			//生成数据，获得贴图的大小
 			auto samplerData = loadSamplerTex();
 			int samplerWidth = samplerData.size();
-
+			
+			//创建资源描述符
 			D3D12_RESOURCE_DESC sampleTexDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, samplerWidth, 1, 1, 1);
+			
 			ThrowIfFailed(m_device->CreateCommittedResource(
 				&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
 				D3D12_HEAP_FLAG_NONE,
@@ -378,7 +370,7 @@ void RenderToTexture::LoadComputeAssets()
 				nullptr,
 				IID_PPV_ARGS(&m_samplerUpload)));
 
-			
+			//把贴图数据提交到上传堆
 			D3D12_SUBRESOURCE_DATA samplerTex = {};
 			samplerTex.pData = &samplerData[0];
 			samplerTex.RowPitch = static_cast<LONG_PTR>(sampleTexDesc.Width * sizeof(uint32_t));
@@ -461,10 +453,14 @@ void RenderToTexture::PopulateCommandList()
 
 	ID3D12DescriptorHeap* ppHeaps[] = { m_computeCbvSrvUavHeap.Get() };
 	m_commandList->SetDescriptorHeaps(_countof(ppHeaps), ppHeaps);
-	m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_computeTexture.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
 
+	//计算管道使用的资源可以在图形管道完成状态转换
+	m_commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_computeTexture.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE));
+	//这里传给图形管道的SRV仍旧使用m_computeTexture资源
 	CD3DX12_GPU_DESCRIPTOR_HANDLE srvhandle(m_computeCbvSrvUavHeap->GetGPUDescriptorHandleForHeapStart(), e_iSRV, m_srvUavDescriptorSize);
+	//绑定到图形管道声明的槽
 	m_commandList->SetGraphicsRootDescriptorTable(0, srvhandle);
+
 	m_commandList->RSSetViewports(1, &m_viewport);
 	m_commandList->RSSetScissorRects(1, &m_scissorRect);
 
@@ -490,7 +486,7 @@ void RenderToTexture::PopulateCommandList()
 
 void RenderToTexture::populateComputeCommandList()
 {
-	// 清空Allocator,为下一帧做准备
+	// 清空Allocator
 	ThrowIfFailed(m_computeCommandAllocator->Reset());
 	ThrowIfFailed(m_computeCommandList->Reset(m_computeCommandAllocator.Get(), m_computePipelineState.Get()));
 	// 设置根签名
@@ -510,14 +506,15 @@ void RenderToTexture::populateComputeCommandList()
 	
 	// 分派任务
 	m_computeCommandList->Dispatch((UINT)ceilf((float)TextureWidth / 256), TextureHeight, 1);
-	
-	m_computeCommandList->SetPipelineState(m_computeVPipelineState.Get());
-
+	// 更换PSO
+	m_computeCommandList->SetPipelineState(m_computePipelineState2.Get());
+	// 重新设置根参数
 	m_computeCommandList->SetComputeRootSignature(m_computeRootSignature.Get());
 	m_computeCommandList->SetComputeRootDescriptorTable(e_rootParameterCB, cbhandle);
 	m_computeCommandList->SetComputeRootDescriptorTable(e_rootParameterSRV, srvhandle);
 	m_computeCommandList->SetComputeRootDescriptorTable(e_rootParameterUAV, uavhandle);
 	m_computeCommandList->Dispatch((UINT)ceilf((float)TextureWidth / 256), TextureHeight, 1);
+	// 换回原来的PSO
 	m_computeCommandList->SetPipelineState(m_computePipelineState.Get());
 	
 	// 关闭命令列表并执行
@@ -536,14 +533,15 @@ void RenderToTexture::populateComputeCommandList()
 
 std::vector<UINT8> RenderToTexture::LoadData()
 {
-	srand((int)time(0));
+	// srand((int)time(0));
 
 	const UINT rowPitch = TextureWidth * 4;
 	const UINT textureSize = rowPitch * TextureHeight;
 
 	std::vector<UINT8> data(textureSize);
 	UINT8* pData = &data[0];
-
+	
+	//贴图数据全部置零
 	for (UINT n = 0; n < textureSize; n += 4)
 	{
 		pData[n] = 0x00;        // R
@@ -551,11 +549,13 @@ std::vector<UINT8> RenderToTexture::LoadData()
 		pData[n + 2] = 0xff;    // G
 		pData[n + 3] = 0xff;    // G
 	}
+	//在窗口最后一行的中间放置一个活cell
 	int k = rowPitch * (TextureHeight - 1) + rowPitch / 2;
 	pData[k] = 0x01;
 	pData[k + 1] = 0x00;
 	pData[k + 2] = 0xff;
 	pData[k + 3] = 0xff;
+	
 	return data;
 }
 
@@ -565,7 +565,12 @@ void RenderToTexture::OnKeyDown(UINT8 key)
 	switch (key)
 	{
 	case VK_SPACE:
+		//空格键更改垂直同步设置
 		IsVSync = !IsVSync;
+		break;
+	case VK_ESCAPE:
+		//退出
+		PostQuitMessage(0);
 		break;
 	}
 }
