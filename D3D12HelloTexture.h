@@ -25,7 +25,7 @@ using Microsoft::WRL::ComPtr;
 class D3D12HelloTexture : public DXSample
 {
 public:
-    D3D12HelloTexture(UINT width, UINT height, std::wstring name);
+    D3D12HelloTexture(UINT width, UINT height, UINT TexWidth, UINT TexHeight, std::wstring name);
 
     virtual void OnInit();
     virtual void OnUpdate();

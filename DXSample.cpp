@@ -126,3 +126,9 @@ void DXSample::ParseCommandLineArgs(WCHAR* argv[], int argc)
         }
     }
 }
+
+void DXSample::getDefaultSize(int& width, int& height) const
+{
+    width = 1280;
+    height = 720;
+}

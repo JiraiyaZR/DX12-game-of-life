@@ -15,6 +15,6 @@
 _Use_decl_annotations_
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 {
-    RenderToTexture sample(2560, 1440, L"D3D12 Hello Texture");
+    RenderToTexture sample(1280, 720, 640, 360, L"DX12 LifeGame", 30, 0.8);
     return Win32Application::Run(&sample, hInstance, nCmdShow);
 }

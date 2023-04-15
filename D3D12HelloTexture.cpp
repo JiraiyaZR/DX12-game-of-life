@@ -12,15 +12,15 @@
 #include "stdafx.h"
 #include "D3D12HelloTexture.h"
 
-D3D12HelloTexture::D3D12HelloTexture(UINT width, UINT height, std::wstring name) :
+D3D12HelloTexture::D3D12HelloTexture(UINT width, UINT height, UINT TexWidth, UINT TexHeight, std::wstring name) :
     DXSample(width, height, name),
     m_frameIndex(0),
-    m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
-    m_scissorRect(0, 0, static_cast<LONG>(width), static_cast<LONG>(height)),
-    m_rtvDescriptorSize(0)
+    m_viewport(0.0f, 0.0f, static_cast<float>(TexWidth), static_cast<float>(TexHeight)),
+    m_scissorRect(0, 0, static_cast<LONG>(TexWidth), static_cast<LONG>(TexHeight)),
+    m_rtvDescriptorSize(0),
+    TextureWidth(TexWidth),
+    TextureHeight(TexHeight)
 {
-    TextureWidth = width;
-    TextureHeight = height;
 }
 
 void D3D12HelloTexture::OnInit()
@@ -85,8 +85,8 @@ void D3D12HelloTexture::LoadPipeline()
     // Describe and create the swap chain.
     DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
     swapChainDesc.BufferCount = FrameCount;
-    swapChainDesc.Width = m_width;
-    swapChainDesc.Height = m_height;
+    swapChainDesc.Width = TextureWidth;
+    swapChainDesc.Height = TextureHeight;
     swapChainDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
     swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;

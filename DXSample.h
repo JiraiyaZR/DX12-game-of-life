@@ -36,6 +36,8 @@ public:
 
     void ParseCommandLineArgs(_In_reads_(argc) WCHAR* argv[], int argc);
 
+    void getDefaultSize(int& width, int& height) const;
+
 protected:
     std::wstring GetAssetFullPath(LPCWSTR assetName);
 
